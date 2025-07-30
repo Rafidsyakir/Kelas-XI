@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Basic Colors -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    
+    <!-- Primary Color Palette - Modern Blue -->
+    <color name="primary_color">#2563EB</color>
+    <color name="primary_dark">#1D4ED8</color>
+    <color name="primary_light">#3B82F6</color>
+    
+    <!-- Secondary Color Palette -->
+    <color name="secondary_color">#7C3AED</color>
+    <color name="secondary_dark">#6D28D9</color>
+    <color name="secondary_light">#8B5CF6</color>
+    
+    <!-- Accent Colors -->
+    <color name="success_color">#10B981</color>
+    <color name="warning_color">#F59E0B</color>
+    <color name="error_color">#EF4444</color>
+    <color name="info_color">#06B6D4</color>
+    <color name="debug_color">#F97316</color>
+    
+    <!-- Text Colors -->
+    <color name="text_primary">#1F2937</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="text_disabled">#9CA3AF</color>
+    
+    <!-- Background Colors -->
+    <color name="background_color">#F8FAFC</color>
+    <color name="surface_color">#F1F5F9</color>
+    <color name="card_background">#FFFFFF</color>
+    
+    <!-- Additional Colors -->
+    <color name="divider_color">#E5E7EB</color>
+    <color name="white_alpha_80">#CCFFFFFF</color>
+    <color name="black_alpha_10">#1A000000</color>
+    
+    <!-- Material Design Colors -->
+    <color name="material_blue_500">#2196F3</color>
+    <color name="material_green_500">#4CAF50</color>
+    <color name="material_orange_500">#FF9800</color>
+    <color name="material_red_500">#F44336</color>
+    <color name="material_purple_500">#9C27B0</color>
+</resources>
