@@ -1,0 +1,168 @@
+name: Firebase App Distribution
+
+on:
+  push:
+    branches: 
+      - main
+      - develop
+    tags:
+      - 'v*'
+  pull_request:
+    branches: 
+      - main
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: 'Release notes untuk distribusi'
+        required: false
+        default: 'Manual distribution build'
+
+jobs:
+  distribute:
+    name: Build dan Distribusi ke Firebase
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Untuk mendapatkan git history
+    
+    - name: ☕ Set up JDK 11
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        cache: 'gradle'
+    
+    - name: 🔧 Setup Android SDK
+      uses: android-actions/setup-android@v3
+    
+    - name: 📝 Grant execute permission for gradlew
+      run: chmod +x gradlew
+    
+    - name: 🔐 Decode Keystore
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      run: |
+        mkdir -p keystore
+        echo "$KEYSTORE_BASE64" | base64 -d > keystore/release-keystore.jks
+        echo "✅ Keystore decoded successfully"
+    
+    - name: 📋 Create Release Notes
+      run: |
+        cat > release-notes.txt << EOF
+        🚀 Build dari GitHub Actions
+        
+        📅 Tanggal: $(date '+%d %B %Y, %H:%M')
+        🔧 Branch: ${GITHUB_REF#refs/heads/}
+        💾 Commit: ${GITHUB_SHA:0:7}
+        👤 Author: ${{ github.actor }}
+        
+        📝 Commit Message:
+        $(git log -1 --pretty=%B)
+        
+        🔗 Link: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+        EOF
+        
+        echo "📝 Release notes created:"
+        cat release-notes.txt
+    
+    - name: 🏗️ Build APK Release
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      run: |
+        ./gradlew assembleRelease --no-daemon --stacktrace
+        echo "✅ APK build completed"
+    
+    - name: 🚀 Upload ke Firebase App Distribution
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+      run: |
+        ./gradlew appDistributionUploadRelease --no-daemon --stacktrace
+        echo "✅ Upload ke Firebase App Distribution berhasil!"
+    
+    - name: 📦 Upload APK sebagai Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release
+        path: app/build/outputs/apk/release/*.apk
+        retention-days: 30
+    
+    - name: 📊 Build Summary
+      run: |
+        echo "## ✅ Build dan Distribusi Berhasil! 🎉" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📱 Informasi Build" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${GITHUB_REF#refs/heads/}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${GITHUB_SHA:0:7}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Author**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Tanggal**: $(date '+%d %B %Y, %H:%M')" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📥 Download" >> $GITHUB_STEP_SUMMARY
+        echo "APK telah diunggah ke Firebase App Distribution dan tersedia sebagai artifact." >> $GITHUB_STEP_SUMMARY
+
+  # Job untuk build AAB (Android App Bundle)
+  distribute-aab:
+    name: Build AAB dan Distribusi ke Firebase
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'  # Hanya untuk branch main
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: ☕ Set up JDK 11
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        cache: 'gradle'
+    
+    - name: 🔧 Setup Android SDK
+      uses: android-actions/setup-android@v3
+    
+    - name: 📝 Grant execute permission for gradlew
+      run: chmod +x gradlew
+    
+    - name: 🔐 Decode Keystore
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      run: |
+        mkdir -p keystore
+        echo "$KEYSTORE_BASE64" | base64 -d > keystore/release-keystore.jks
+    
+    - name: 📋 Create Release Notes
+      run: |
+        cat > release-notes.txt << EOF
+        🚀 AAB Build dari GitHub Actions
+        
+        📅 Tanggal: $(date '+%d %B %Y, %H:%M')
+        🔧 Branch: ${GITHUB_REF#refs/heads/}
+        💾 Commit: ${GITHUB_SHA:0:7}
+        
+        📝 Build untuk Play Store submission
+        EOF
+    
+    - name: 🏗️ Build AAB Release
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      run: |
+        ./gradlew bundleRelease --no-daemon --stacktrace
+        echo "✅ AAB build completed"
+    
+    - name: 📦 Upload AAB sebagai Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release-aab
+        path: app/build/outputs/bundle/release/*.aab
+        retention-days: 90

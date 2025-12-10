@@ -1,0 +1,96 @@
+image: openjdk:11-jdk-slim
+
+variables:
+  ANDROID_COMPILE_SDK: "36"
+  ANDROID_BUILD_TOOLS: "34.0.0"
+  ANDROID_SDK_TOOLS: "9477386"
+
+stages:
+  - build
+  - distribute
+
+before_script:
+  - apt-get --quiet update --yes
+  - apt-get --quiet install --yes wget tar unzip lib32stdc++6 lib32z1 git
+  - export ANDROID_HOME="${PWD}/android-sdk-linux"
+  - export PATH="${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools"
+  - wget --quiet --output-document=android-sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_SDK_TOOLS}_latest.zip
+  - unzip -q android-sdk.zip -d $ANDROID_HOME
+  - mkdir -p $ANDROID_HOME/cmdline-tools/latest
+  - mv $ANDROID_HOME/cmdline-tools/bin $ANDROID_HOME/cmdline-tools/latest/
+  - mv $ANDROID_HOME/cmdline-tools/lib $ANDROID_HOME/cmdline-tools/latest/
+  - yes | sdkmanager --licenses || true
+  - sdkmanager "platform-tools" "platforms;android-${ANDROID_COMPILE_SDK}" "build-tools;${ANDROID_BUILD_TOOLS}"
+  - chmod +x ./gradlew
+
+build:
+  stage: build
+  script:
+    - echo "🏗️ Building APK Release..."
+    - mkdir -p keystore
+    - echo "$KEYSTORE_BASE64" | base64 -d > keystore/release-keystore.jks
+    - ./gradlew assembleRelease --no-daemon --stacktrace
+    - echo "✅ APK build completed"
+  artifacts:
+    paths:
+      - app/build/outputs/apk/release/
+    expire_in: 1 week
+  only:
+    - develop
+    - main
+
+distribute:
+  stage: distribute
+  dependencies:
+    - build
+  script:
+    - echo "📝 Creating release notes..."
+    - |
+      cat > release-notes.txt << EOF
+      🚀 Build dari GitLab CI/CD
+      
+      📅 Tanggal: $(date '+%d %B %Y, %H:%M')
+      🔧 Branch: $CI_COMMIT_REF_NAME
+      💾 Commit: $CI_COMMIT_SHORT_SHA
+      👤 Author: $GITLAB_USER_NAME
+      
+      📝 Commit Message:
+      $CI_COMMIT_MESSAGE
+      
+      🔗 Pipeline: $CI_PIPELINE_URL
+      EOF
+    - echo "📝 Release notes created"
+    - cat release-notes.txt
+    - echo "🚀 Uploading to Firebase App Distribution..."
+    - mkdir -p keystore
+    - echo "$KEYSTORE_BASE64" | base64 -d > keystore/release-keystore.jks
+    - ./gradlew appDistributionUploadRelease --no-daemon --stacktrace
+    - echo "✅ Upload to Firebase App Distribution successful!"
+  only:
+    - develop
+    - main
+
+# Job untuk build AAB (hanya untuk main branch)
+build-aab:
+  stage: build
+  script:
+    - echo "🏗️ Building AAB Release..."
+    - mkdir -p keystore
+    - echo "$KEYSTORE_BASE64" | base64 -d > keystore/release-keystore.jks
+    - ./gradlew bundleRelease --no-daemon --stacktrace
+    - echo "✅ AAB build completed"
+  artifacts:
+    paths:
+      - app/build/outputs/bundle/release/
+    expire_in: 3 months
+  only:
+    - main
+
+# Job untuk validasi konfigurasi
+validate:
+  stage: build
+  script:
+    - echo "🔍 Validating configuration..."
+    - ./gradlew checkDistributionConfig --no-daemon
+  only:
+    - merge_requests

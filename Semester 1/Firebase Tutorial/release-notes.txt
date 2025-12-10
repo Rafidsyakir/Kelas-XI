@@ -1,0 +1,17 @@
+Version 1.0.0 - Initial Release
+================================
+
+✨ Fitur Baru:
+- Implementasi Firebase Crashlytics untuk monitoring crash
+- Integrasi Firebase Analytics untuk tracking user behavior
+- Setup Firebase App Distribution untuk automated testing
+
+🔧 Improvement:
+- Optimasi performa aplikasi
+- Update Firebase SDK ke versi terbaru
+
+📝 Catatan:
+- Build pertama untuk testing team
+- Mohon feedback untuk improvement selanjutnya
+
+Tanggal Rilis: 10 Desember 2025

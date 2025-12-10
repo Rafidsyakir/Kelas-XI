@@ -1,0 +1,306 @@
+plugins {
+    id("com.android.application")
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
+    // Firebase App Distribution Plugin
+    id("com.google.firebase.appdistribution")
+}
+
+android {
+    namespace = "com.example.firebasetutorial"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "com.example.firebasetutorial"
+        minSdk = 24
+        targetSdk = 36
+        versionCode = 1
+        versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Load keystore properties untuk signing
+    val keystorePropertiesFile = rootProject.file("keystore.properties")
+    val keystoreProperties = java.util.Properties()
+    
+    if (keystorePropertiesFile.exists()) {
+        keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
+    }
+
+    signingConfigs {
+        create("release") {
+            // Prioritas: keystore.properties > environment variables
+            storeFile = file(
+                keystoreProperties.getProperty("storeFile") 
+                    ?: System.getenv("KEYSTORE_FILE") 
+                    ?: "../keystore/release-keystore.jks"
+            )
+            storePassword = keystoreProperties.getProperty("storePassword") 
+                ?: System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = keystoreProperties.getProperty("keyAlias") 
+                ?: System.getenv("KEY_ALIAS")
+            keyPassword = keystoreProperties.getProperty("keyPassword") 
+                ?: System.getenv("KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            // Gunakan signing config untuk release
+            signingConfig = signingConfigs.getByName("release")
+            
+            // Konfigurasi Firebase App Distribution untuk Release
+            configure<com.google.firebase.appdistribution.gradle.AppDistributionExtension> {
+                // Tipe artifact: "APK" atau "AAB"
+                artifactType = "APK"
+                
+                // Release notes dari file
+                releaseNotesFile = "./release-notes.txt"
+                
+                // Grup tester yang akan menerima distribusi
+                // Pastikan grup ini sudah dibuat di Firebase Console
+                groups = "qa-team, management"
+                
+                // Atau gunakan tester individual:
+                // testers = "tester1@example.com, tester2@example.com"
+                
+                // Service account credentials (opsional untuk CI/CD)
+                // Uncomment jika menggunakan service account
+                // serviceCredentialsFile = "./firebase-service-account.json"
+            }
+        }
+        
+        debug {
+            // Konfigurasi opsional untuk debug build
+            configure<com.google.firebase.appdistribution.gradle.AppDistributionExtension> {
+                artifactType = "APK"
+                releaseNotes = "Debug build untuk internal testing"
+                groups = "internal-testers"
+            }
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+}
+
+dependencies {
+    implementation(libs.appcompat)
+    implementation(libs.material)
+    implementation(libs.activity)
+    implementation(libs.constraintlayout)
+    implementation(libs.play.services.measurement.api)
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.ext.junit)
+    androidTestImplementation(libs.espresso.core)
+
+    // Firebase BoM
+    implementation(platform("com.google.firebase:firebase-bom:34.6.0"))
+    implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-analytics")
+}
+
+// ============================================
+// Custom Gradle Tasks untuk Distribusi
+// ============================================
+
+// Task: Distribusi APK otomatis
+tasks.register("distributeApk") {
+    group = "distribution"
+    description = "Clean, build, dan upload APK release ke Firebase App Distribution"
+    
+    dependsOn("clean", "assembleRelease", "appDistributionUploadRelease")
+    
+    doLast {
+        println("=" .repeat(60))
+        println("✅ APK berhasil didistribusikan ke Firebase App Distribution!")
+        println("📱 Tester akan menerima notifikasi segera")
+        println("=" .repeat(60))
+    }
+}
+
+// Task: Distribusi AAB otomatis
+tasks.register("distributeAab") {
+    group = "distribution"
+    description = "Clean, build, dan upload AAB release ke Firebase App Distribution"
+    
+    dependsOn("clean", "bundleRelease", "appDistributionUploadRelease")
+    
+    doLast {
+        println("=" .repeat(60))
+        println("✅ AAB berhasil didistribusikan ke Firebase App Distribution!")
+        println("📱 Tester akan menerima notifikasi segera")
+        println("=" .repeat(60))
+    }
+}
+
+// Task: Distribusi dengan release notes otomatis
+tasks.register("distributeWithAutoNotes") {
+    group = "distribution"
+    description = "Distribusi dengan release notes yang di-generate otomatis dari Git"
+    
+    doFirst {
+        val versionName = android.defaultConfig.versionName
+        val versionCode = android.defaultConfig.versionCode
+        val currentDate = java.time.LocalDateTime.now()
+            .format(java.time.format.DateTimeFormatter.ofPattern("dd MMMM yyyy, HH:mm"))
+        
+        val gitCommit = getGitCommitHash()
+        val gitBranch = getGitBranch()
+        val gitAuthor = getGitAuthor()
+        
+        val releaseNotes = """
+            Version $versionName (Build $versionCode)
+            ==========================================
+            
+            📅 Tanggal Rilis: $currentDate
+            🔧 Branch: $gitBranch
+            💾 Commit: $gitCommit
+            👤 Author: $gitAuthor
+            
+            ✨ Fitur & Perubahan:
+            - Build otomatis dari CI/CD
+            - Lihat commit log untuk detail perubahan
+            
+            📝 Catatan:
+            Build ini dibuat secara otomatis untuk testing.
+            Silakan laporkan bug atau feedback ke tim development.
+        """.trimIndent()
+        
+        val releaseNotesFile = file("release-notes.txt")
+        releaseNotesFile.writeText(releaseNotes)
+        
+        println("📝 Release notes telah di-generate otomatis")
+    }
+    
+    dependsOn("assembleRelease", "appDistributionUploadRelease")
+    
+    doLast {
+        println("=" .repeat(60))
+        println("✅ Distribusi dengan auto-generated release notes selesai!")
+        println("=" .repeat(60))
+    }
+}
+
+// Task: Distribusi cepat (tanpa clean)
+tasks.register("quickDistribute") {
+    group = "distribution"
+    description = "Distribusi cepat tanpa clean (gunakan jika yakin tidak ada perubahan)"
+    
+    dependsOn("assembleRelease", "appDistributionUploadRelease")
+    
+    doLast {
+        println("=" .repeat(60))
+        println("✅ Quick distribution selesai!")
+        println("⚠️  Catatan: Task ini tidak melakukan clean build")
+        println("=" .repeat(60))
+    }
+}
+
+// Task: Check konfigurasi Firebase App Distribution
+tasks.register("checkDistributionConfig") {
+    group = "distribution"
+    description = "Validasi konfigurasi Firebase App Distribution"
+    
+    doLast {
+        println("=" .repeat(60))
+        println("🔍 Memeriksa Konfigurasi Firebase App Distribution")
+        println("=" .repeat(60))
+        
+        // Check keystore
+        val keystoreFile = file(
+            if (rootProject.file("keystore.properties").exists()) {
+                val props = java.util.Properties()
+                props.load(java.io.FileInputStream(rootProject.file("keystore.properties")))
+                props.getProperty("storeFile")
+            } else {
+                "../keystore/release-keystore.jks"
+            }
+        )
+        
+        if (keystoreFile.exists()) {
+            println("✅ Keystore file ditemukan: ${keystoreFile.absolutePath}")
+        } else {
+            println("❌ Keystore file TIDAK ditemukan: ${keystoreFile.absolutePath}")
+            println("   Buat keystore dengan: keytool -genkey -v -keystore release-keystore.jks ...")
+        }
+        
+        // Check release notes
+        val releaseNotesFile = file("release-notes.txt")
+        if (releaseNotesFile.exists()) {
+            println("✅ Release notes file ditemukan")
+        } else {
+            println("⚠️  Release notes file tidak ditemukan (akan di-generate otomatis)")
+        }
+        
+        // Check google-services.json
+        val googleServicesFile = file("google-services.json")
+        if (googleServicesFile.exists()) {
+            println("✅ google-services.json ditemukan")
+        } else {
+            println("❌ google-services.json TIDAK ditemukan")
+            println("   Download dari Firebase Console")
+        }
+        
+        // Check Firebase token
+        val firebaseToken = System.getenv("FIREBASE_TOKEN")
+        if (firebaseToken != null && firebaseToken.isNotEmpty()) {
+            println("✅ Firebase token tersedia dari environment variable")
+        } else {
+            println("⚠️  Firebase token tidak ditemukan")
+            println("   Set dengan: \$env:FIREBASE_TOKEN=\"your-token\"")
+            println("   Atau login dengan: firebase login:ci")
+        }
+        
+        println("=" .repeat(60))
+        println("Version: ${android.defaultConfig.versionName} (${android.defaultConfig.versionCode})")
+        println("Application ID: ${android.defaultConfig.applicationId}")
+        println("=" .repeat(60))
+    }
+}
+
+// ============================================
+// Helper Functions untuk Git Info
+// ============================================
+
+fun getGitCommitHash(): String {
+    return try {
+        val process = Runtime.getRuntime().exec("git rev-parse --short HEAD")
+        val result = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        if (result.isEmpty()) "unknown" else result
+    } catch (e: Exception) {
+        "unknown"
+    }
+}
+
+fun getGitBranch(): String {
+    return try {
+        val process = Runtime.getRuntime().exec("git rev-parse --abbrev-ref HEAD")
+        val result = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        if (result.isEmpty()) "unknown" else result
+    } catch (e: Exception) {
+        "unknown"
+    }
+}
+
+fun getGitAuthor(): String {
+    return try {
+        val process = Runtime.getRuntime().exec("git log -1 --pretty=format:%an")
+        val result = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        if (result.isEmpty()) "unknown" else result
+    } catch (e: Exception) {
+        "unknown"
+    }
+}
