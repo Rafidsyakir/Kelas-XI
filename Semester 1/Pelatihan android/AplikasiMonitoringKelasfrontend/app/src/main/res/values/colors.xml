@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Aurora Night Theme Colors -->
+    <color name="space_black">#FF0A0A0F</color>
+    <color name="space_navy">#FF0D1B2A</color>
+    <color name="space_blue">#FF1B263B</color>
+    
+    <!-- Aurora Accent Colors -->
+    <color name="aurora_blue">#FF00B4D8</color>
+    <color name="aurora_purple">#FF9D4EDD</color>
+    <color name="aurora_pink">#FFFF006E</color>
+    <color name="aurora_green">#FF06FFA5</color>
+    <color name="aurora_gold">#FFFFBE0B</color>
+    
+    <!-- Gradient Colors -->
+    <color name="gradient_cyan">#FF00F5D4</color>
+    <color name="gradient_blue">#FF00BBF9</color>
+    <color name="gradient_purple">#FF9B5DE5</color>
+    <color name="gradient_pink">#FFF15BB5</color>
+    
+    <!-- Status Colors -->
+    <color name="neon_success">#FF06FFA5</color>
+    <color name="neon_error">#FFFF3366</color>
+    <color name="neon_warning">#FFFFBE0B</color>
+    <color name="neon_info">#FF00B4D8</color>
+    
+    <!-- Base Colors -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="text_bright">#FFFFFFFF</color>
+    <color name="text_muted">#FF8892A0</color>
+    
+    <!-- Legacy Support -->
+    <color name="teal_200">#FF00F5D4</color>
+    <color name="teal_500">#FF00BBF9</color>
+    <color name="teal_700">#FF0D1B2A</color>
+    <color name="coral_200">#FFF15BB5</color>
+    <color name="coral_500">#FFFF006E</color>
+    <color name="light_gray">#FF0D1B2A</color>
+    <color name="dark_slate">#FF0A0A0F</color>
+</resources>
