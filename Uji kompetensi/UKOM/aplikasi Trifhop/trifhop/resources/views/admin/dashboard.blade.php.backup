@@ -1,0 +1,296 @@
+@extends('admin.layouts.app')
+
+@section('title', 'Dashboard')
+@section('page-title', 'Dashboard Overview')
+@section('page-description', 'Welcome back, manage your thrift shop')
+
+@section('styles')
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+@endsection
+
+@section('content')
+<div class="space-y-8">
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="animate-fade-in-up glass-effect rounded-2xl p-6 border-l-4 border-blue-500 card-hover" style="animation-delay: 0.1s">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+                    <i class="fas fa-dollar-sign text-white text-2xl"></i>
+                </div>
+                <span class="px-3 py-1 bg-green-500/20 text-green-400 rounded-lg text-xs font-bold border border-green-500/30">
+                    <i class="fas fa-arrow-up mr-1"></i>12.5%
+                </span>
+            </div>
+            <p class="text-slate-400 text-sm font-medium mb-1">Total Revenue</p>
+            <h3 class="text-3xl font-bold text-white mb-1">Rp {{ number_format($totalRevenue, 0, ',', '.') }}</h3>
+            <p class="text-slate-500 text-xs">This month</p>
+        </div>
+
+        <div class="animate-fade-in-up glass-effect rounded-2xl p-6 border-l-4 border-green-500 card-hover" style="animation-delay: 0.2s">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg shadow-green-500/30">
+                    <i class="fas fa-shopping-cart text-white text-2xl"></i>
+                </div>
+                <span class="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-lg text-xs font-bold border border-blue-500/30">
+                    <i class="fas fa-arrow-up mr-1"></i>8.2%
+                </span>
+            </div>
+            <p class="text-slate-400 text-sm font-medium mb-1">Total Orders</p>
+            <h3 class="text-3xl font-bold text-white mb-1">{{ number_format($totalOrders) }}</h3>
+            <p class="text-slate-500 text-xs">All time</p>
+        </div>
+
+        <div class="animate-fade-in-up glass-effect rounded-2xl p-6 border-l-4 border-cyan-500 card-hover" style="animation-delay: 0.3s">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-14 h-14 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/30">
+                    <i class="fas fa-box text-white text-2xl"></i>
+                </div>
+                <span class="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-lg text-xs font-bold border border-yellow-500/30">
+                    <i class="fas fa-exclamation-triangle mr-1"></i>Low
+                </span>
+            </div>
+            <p class="text-slate-400 text-sm font-medium mb-1">Products Sold</p>
+            <h3 class="text-3xl font-bold text-white mb-1">{{ number_format($soldProducts) }}</h3>
+            <p class="text-slate-500 text-xs">{{ number_format($availableStock) }} in stock</p>
+        </div>
+
+        <div class="animate-fade-in-up glass-effect rounded-2xl p-6 border-l-4 border-yellow-500 card-hover" style="animation-delay: 0.4s">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-14 h-14 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl flex items-center justify-center shadow-lg shadow-yellow-500/30">
+                    <i class="fas fa-users text-white text-2xl"></i>
+                </div>
+                <span class="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-lg text-xs font-bold border border-purple-500/30">
+                    <i class="fas fa-user-plus mr-1"></i>New
+                </span>
+            </div>
+            <p class="text-slate-400 text-sm font-medium mb-1">Total Customers</p>
+            <h3 class="text-3xl font-bold text-white mb-1">{{ number_format($totalCustomers) }}</h3>
+            <p class="text-slate-500 text-xs">Active users</p>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Sales Chart -->
+        <div class="animate-fade-in-up glass-effect rounded-2xl overflow-hidden" style="animation-delay: 0.5s">
+            <div class="p-6 border-b border-slate-800">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-xl font-bold text-white mb-1">Sales Overview</h3>
+                        <p class="text-slate-400 text-sm">Monthly revenue trend</p>
+                    </div>
+                    <select class="px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500 transition-all">
+                        <option>Last 6 Months</option>
+                        <option>Last Year</option>
+                        <option>All Time</option>
+                    </select>
+                </div>
+            </div>
+            <div class="p-6">
+                <canvas id="salesChart" height="300"></canvas>
+            </div>
+        </div>
+
+        <!-- Top Products -->
+        <div class="animate-fade-in-up glass-effect rounded-2xl overflow-hidden" style="animation-delay: 0.6s">
+            <div class="p-6 border-b border-slate-800">
+                <h3 class="text-xl font-bold text-white mb-1">Top Products</h3>
+                <p class="text-slate-400 text-sm">Best selling items</p>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    @foreach($topProducts as $index => $product)
+                    <div class="flex items-center justify-between p-4 bg-slate-900/30 rounded-xl hover:bg-slate-900/50 transition-all cursor-pointer">
+                        <div class="flex items-center space-x-4">
+                            <div class="relative">
+                                <div class="w-12 h-12 bg-gradient-to-br {{ $index == 0 ? 'from-yellow-500 to-orange-500' : ($index == 1 ? 'from-slate-400 to-slate-500' : ($index == 2 ? 'from-orange-600 to-orange-700' : 'from-blue-500 to-blue-600')) }} rounded-xl flex items-center justify-center shadow-lg font-bold text-white text-lg">
+                                    #{{ $index + 1 }}
+                                </div>
+                            </div>
+                            <img src="{{ asset($product->image_url) }}" alt="{{ $product->name }}" class="w-12 h-12 rounded-lg object-cover border-2 border-slate-700">
+                            <div>
+                                <p class="font-semibold text-white">{{ Str::limit($product->name, 20) }}</p>
+                                <p class="text-sm text-slate-400">{{ $product->category->name }}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-white">Rp {{ number_format($product->price, 0, ',', '.') }}</p>
+                            <p class="text-sm text-green-400">{{ $product->stock }} in stock</p>
+                        </div>
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Transactions -->
+    <div class="animate-fade-in-up glass-effect rounded-2xl overflow-hidden" style="animation-delay: 0.7s">
+        <div class="p-6 border-b border-slate-800">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-xl font-bold text-white mb-1">Recent Transactions</h3>
+                    <p class="text-slate-400 text-sm">Latest customer orders</p>
+                </div>
+                <a href="{{ route('admin.orders.index') }}" class="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-xl hover:bg-blue-500/30 border border-blue-500/30 hover:border-blue-500/50 transition-all font-medium text-sm">
+                    View All <i class="fas fa-arrow-right ml-2"></i>
+                </a>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-slate-900/50">
+                    <tr>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Order ID</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Customer</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Amount</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Date</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800">
+                    @foreach($recentTransactions as $transaction)
+                    <tr class="hover:bg-slate-900/30 transition-colors">
+                        <td class="px-6 py-4">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center border border-blue-500/30">
+                                    <i class="fas fa-receipt text-blue-400"></i>
+                                </div>
+                                <span class="font-bold text-white">#{{ str_pad($transaction->id, 5, '0', STR_PAD_LEFT) }}</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-md">
+                                    <span class="text-white font-bold text-sm">{{ substr($transaction->user->name, 0, 1) }}</span>
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-white">{{ $transaction->user->name }}</p>
+                                    <p class="text-sm text-slate-400">{{ $transaction->user->email }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <p class="font-bold text-white text-lg">Rp {{ number_format($transaction->total_amount, 0, ',', '.') }}</p>
+                        </td>
+                        <td class="px-6 py-4">
+                            @if($transaction->status == 'pending')
+                                <span class="px-3 py-1.5 bg-yellow-500/20 text-yellow-400 rounded-lg text-sm font-medium border border-yellow-500/30 inline-flex items-center">
+                                    <span class="w-2 h-2 bg-yellow-400 rounded-full mr-2 animate-pulse"></span>
+                                    Pending
+                                </span>
+                            @elseif($transaction->status == 'processing')
+                                <span class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-sm font-medium border border-blue-500/30 inline-flex items-center">
+                                    <span class="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></span>
+                                    Processing
+                                </span>
+                            @elseif($transaction->status == 'completed')
+                                <span class="px-3 py-1.5 bg-green-500/20 text-green-400 rounded-lg text-sm font-medium border border-green-500/30 inline-flex items-center">
+                                    <span class="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
+                                    Completed
+                                </span>
+                            @else
+                                <span class="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg text-sm font-medium border border-red-500/30 inline-flex items-center">
+                                    <span class="w-2 h-2 bg-red-400 rounded-full mr-2"></span>
+                                    Cancelled
+                                </span>
+                            @endif
+                        </td>
+                        <td class="px-6 py-4">
+                            <p class="text-white">{{ $transaction->created_at->format('d M Y') }}</p>
+                            <p class="text-sm text-slate-400">{{ $transaction->created_at->format('h:i A') }}</p>
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+@endsection
+
+@section('scripts')
+<script>
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    
+    // Create gradient
+    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.4)');
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+    
+    const salesChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: {!! json_encode($salesByMonth->pluck('month')) !!},
+            datasets: [{
+                label: 'Revenue',
+                data: {!! json_encode($salesByMonth->pluck('total')) !!},
+                borderColor: '#3b82f6',
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.4,
+                borderWidth: 3,
+                pointBackgroundColor: '#3b82f6',
+                pointBorderColor: '#0f172a',
+                pointBorderWidth: 3,
+                pointRadius: 6,
+                pointHoverRadius: 8,
+                pointHoverBackgroundColor: '#60a5fa',
+                pointHoverBorderColor: '#3b82f6',
+                pointHoverBorderWidth: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    titleColor: '#e2e8f0',
+                    bodyColor: '#cbd5e1',
+                    borderColor: '#334155',
+                    borderWidth: 1,
+                    padding: 12,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(context) {
+                            return 'Rp ' + context.parsed.y.toLocaleString('id-ID');
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: '#1e293b',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#94a3b8',
+                        callback: function(value) {
+                            return 'Rp ' + (value / 1000) + 'K';
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false,
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#94a3b8'
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
+</script>
+@endsection

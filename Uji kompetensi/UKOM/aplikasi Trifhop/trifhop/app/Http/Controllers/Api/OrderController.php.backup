@@ -1,0 +1,319 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Transaction;
+use App\Models\Product;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+
+class OrderController extends Controller
+{
+    /**
+     * Create new order (checkout)
+     * 
+     * REQUEST:
+     * {
+     *   "products": [{"id": 43, "quantity": 1}],
+     *   "customer_name": "Rafid",
+     *   "customer_phone": "081234567890",
+     *   "shipping_address": "Jl. Test No. 1",
+     *   "shipping_fee": 10000
+     * }
+     */
+    public function store(Request $request)
+    {
+        // === DEBUG: Log incoming request ===
+        Log::info('📋 ORDER CREATE REQUEST', [
+            'user_id' => $request->user()?->id ?? 'UNAUTHENTICATED',
+            'user_email' => $request->user()?->email ?? 'NONE',
+            'request_data' => $request->all(),
+            'headers' => $request->headers->all(),
+        ]);
+
+        try {
+            // === STEP 1: Validate authentication ===
+            $user = $request->user();
+            if (!$user) {
+                Log::warning('❌ User not authenticated for order creation');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthenticated',
+                    'error' => 'Please login first',
+                ], 401);
+            }
+
+            // === STEP 2: Validate input data ===
+            $validated = $request->validate([
+                'products'         => 'required|array|min:1',
+                'products.*.id'    => 'required|integer|exists:products,id',
+                'products.*.quantity' => 'required|integer|min:1',
+                'customer_name'    => 'required|string|max:255',
+                'customer_phone'   => 'required|string|max:20',
+                'shipping_address' => 'required|string|max:500',
+                'shipping_fee'     => 'nullable|numeric|min:0',
+            ]);
+
+            Log::info('✅ Validation passed', ['validated_data' => $validated]);
+
+            // === STEP 3: Begin transaction ===
+            DB::beginTransaction();
+            Log::info('🔄 Database transaction started');
+
+            // === STEP 4: Validate and calculate product totals ===
+            $productSubtotal = 0;
+            $productsToUpdate = [];
+
+            foreach ($validated['products'] as $item) {
+                $product = Product::find($item['id']);
+
+                if (!$product) {
+                    throw new \Exception("Product with ID {$item['id']} not found");
+                }
+
+                if (!$product->isAvailable()) {
+                    throw new \Exception("Product '{$product->name}' is not available");
+                }
+
+                if ((int) $product->stock < (int) $item['quantity']) {
+                    throw new \Exception("Insufficient stock for '{$product->name}'. Available: {$product->stock}, Requested: {$item['quantity']}");
+                }
+
+                $productSubtotal += $product->price * $item['quantity'];
+                $productsToUpdate[] = [
+                    'product'  => $product,
+                    'quantity' => $item['quantity'],
+                ];
+            }
+
+            Log::info('✅ Products validated', [
+                'products_count' => count($productsToUpdate),
+                'subtotal' => $productSubtotal,
+            ]);
+
+            // === STEP 5: Calculate total with shipping ===
+            $shippingFee = (int) ($validated['shipping_fee'] ?? 10000);
+            $totalPrice  = $productSubtotal + $shippingFee;
+
+            Log::info('💰 Pricing calculated', [
+                'subtotal' => $productSubtotal,
+                'shipping_fee' => $shippingFee,
+                'total_price' => $totalPrice,
+            ]);
+
+            // === STEP 6: Create transaction in database ===
+            $transaction = Transaction::create([
+                'user_id'          => $user->id,
+                'invoice_code'     => Transaction::generateInvoiceCode(),
+                'total_price'      => $totalPrice,
+                'status'           => 'pending',
+                'payment_status'   => 'UNPAID',
+                'customer_name'    => $validated['customer_name'],
+                'customer_phone'   => $validated['customer_phone'],
+                'shipping_address' => $validated['shipping_address'],
+                'ordered_at'       => now(),
+            ]);
+
+            Log::info('✅ Transaction created', [
+                'transaction_id' => $transaction->id,
+                'invoice_code' => $transaction->invoice_code,
+            ]);
+
+            // === STEP 7: Create transaction details and update stock ===
+            foreach ($productsToUpdate as $item) {
+                $product  = $item['product'];
+                $quantity = $item['quantity'];
+
+                $transaction->details()->create([
+                    'product_id'         => $product->id,
+                    'price_at_purchase'  => $product->price,
+                    'quantity'           => $quantity,
+                ]);
+
+                $newStock = $product->stock - $quantity;
+                $product->update([
+                    'stock'  => $newStock,
+                    'status' => $newStock > 0 ? 'available' : 'sold',
+                ]);
+
+                Log::info('✅ Product stock updated', [
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'old_stock' => $product->stock,
+                    'new_stock' => $newStock,
+                ]);
+            }
+
+            // === STEP 8: Commit transaction ===
+            DB::commit();
+            Log::info('✅ Database transaction committed');
+
+            // === STEP 9: Load and return complete transaction data ===
+            $transaction->load(['details.product', 'user']);
+
+            Log::info('🎉 Order created successfully', [
+                'order_id' => $transaction->id,
+                'user_id' => $user->id,
+                'total_price' => $totalPrice,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Order created successfully',
+                'data'    => $transaction,
+            ], 201);
+
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            Log::error('❌ VALIDATION FAILED', [
+                'errors' => $e->errors(),
+                'all_data' => $request->all(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors'  => $e->errors(),
+            ], 422);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('❌ ORDER CREATION FAILED', [
+                'error_message' => $e->getMessage(),
+                'error_code' => $e->getCode(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'user_id' => $request->user()?->id,
+                'request_data' => $request->all(),
+            ]);
+
+            // Return specific error message based on exception type
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create order',
+                'error'   => $e->getMessage(),
+                'debug' => [
+                    'exception_class' => get_class($e),
+                    'code' => $e->getCode(),
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Get current orders (pending, packed, sent)
+     */
+    public function current(Request $request)
+    {
+        try {
+            $orders = Transaction::with(['details.product'])
+                ->where('user_id', $request->user()->id)
+                ->whereIn('status', ['pending', 'packed', 'sent'])
+                ->latest()
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Current orders retrieved successfully',
+                'data' => $orders,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch current orders',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get past orders (finished)
+     */
+    public function past(Request $request)
+    {
+        try {
+            $orders = Transaction::with(['details.product'])
+                ->where('user_id', $request->user()->id)
+                ->where('status', 'finished')
+                ->latest()
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Past orders retrieved successfully',
+                'data' => $orders,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch past orders',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get order detail
+     */
+    public function show(Request $request, $id)
+    {
+        try {
+            $order = Transaction::with(['details.product', 'user'])
+                ->where('user_id', $request->user()->id)
+                ->find($id);
+
+            if (!$order) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Order not found',
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Order retrieved successfully',
+                'data' => $order,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch order',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Track order by invoice code
+     */
+    public function track(Request $request, $invoiceCode)
+    {
+        try {
+            $order = Transaction::with(['details.product'])
+                ->where('invoice_code', $invoiceCode)
+                ->where('user_id', $request->user()->id)
+                ->first();
+
+            if (!$order) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Order not found',
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Order tracking retrieved successfully',
+                'data' => $order,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to track order',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+}
